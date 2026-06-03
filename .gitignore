@@ -1,0 +1,10 @@
+.env
+.3logic_tokens.json
+exports/
+__pycache__/
+*.py[cod]
+*.сsv
+*.zip
+.idea/
+.venv/
+venv/
