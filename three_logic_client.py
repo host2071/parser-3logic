@@ -13,6 +13,15 @@ from dotenv import load_dotenv
 
 DEFAULT_API_BASE_URL = "https://oapi.3logic.ru"
 DEFAULT_TOKEN_CACHE = ".3logic_tokens.json"
+_ENV_LOADED = False
+
+
+def _load_env_once() -> None:
+    global _ENV_LOADED
+    if _ENV_LOADED:
+        return
+    load_dotenv()
+    _ENV_LOADED = True
 
 
 class ThreeLogicApiError(RuntimeError):
@@ -33,7 +42,7 @@ class ThreeLogicSettings:
 
     @classmethod
     def from_env(cls) -> "ThreeLogicSettings":
-        load_dotenv()
+        _load_env_once()
 
         login = os.getenv("THREELOGIC_LOGIN", "").strip()
         password = os.getenv("THREELOGIC_PASSWORD", "").strip()

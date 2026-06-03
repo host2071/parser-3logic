@@ -8,7 +8,6 @@ from urllib.parse import urlencode
 from urllib.request import urlopen
 from xml.etree import ElementTree
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import HTMLResponse
 
@@ -43,8 +42,6 @@ def product_categories_json() -> list[dict[str, Any]]:
 
 
 def load_product_categories() -> list[dict[str, Any]]:
-    load_dotenv()
-
     try:
         return ThreeLogicClient().list_product_categories()
     except ThreeLogicApiError as error:
@@ -67,8 +64,6 @@ def export_products(
     usd_to_rub: str = Query(str(DEFAULT_USD_TO_RUB_RATE), description="USD to RUB exchange rate."),
     filename: str | None = Query(None),
 ) -> Response:
-    load_dotenv()
-
     try:
         filters = build_product_filters(
             product_category_id=category_id,
