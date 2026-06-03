@@ -1,5 +1,7 @@
 # 3Logic API Parser
 
+Программа помогает в работе парсинга товаров для интернет магазина видеокарт [viabit.ru](https://viabit.ru/).
+
 Python parser scaffold for loading products from the 3Logic OAPI and exporting them to CSV.
 
 ## Setup
