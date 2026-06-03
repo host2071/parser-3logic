@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import csv
-import os
 from pathlib import Path
-
-from dotenv import load_dotenv
 
 
 PRODUCT_CSV_DESCRIPTIONS = [
@@ -93,9 +90,7 @@ PRODUCT_CSV_COLUMNS = [
 
 
 def create_products_csv_template(path: str | Path | None = None) -> Path:
-    load_dotenv()
-
-    csv_path = Path(path or os.getenv("PRODUCTS_CSV_PATH", "products_template.csv"))
+    csv_path = Path(path or "products_template.csv")
     csv_path.parent.mkdir(parents=True, exist_ok=True)
 
     with csv_path.open("w", newline="", encoding="utf-8-sig") as csv_file:

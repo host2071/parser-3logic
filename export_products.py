@@ -3,12 +3,9 @@ from __future__ import annotations
 import argparse
 import csv
 import io
-import os
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Iterable
-
-from dotenv import load_dotenv
 
 from create_csv_template import PRODUCT_CSV_COLUMNS
 from three_logic_client import ThreeLogicApiError, ThreeLogicClient
@@ -320,14 +317,11 @@ def build_product_filters(
 
 
 def resolve_output_path(output_dir: str | None, output_file: str | None) -> Path:
-    load_dotenv()
-
     if output_file:
         return Path(output_file)
 
-    directory = Path(output_dir or os.getenv("PRODUCTS_OUTPUT_DIR", "."))
-    filename = os.getenv("PRODUCTS_OUTPUT_FILENAME", DEFAULT_OUTPUT_FILENAME)
-    return directory / filename
+    directory = Path(output_dir or ".")
+    return directory / DEFAULT_OUTPUT_FILENAME
 
 
 def parse_args() -> argparse.Namespace:
