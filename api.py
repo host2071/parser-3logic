@@ -18,7 +18,7 @@ from export_products import (
     build_product_filters,
     export_products_to_csv_bytes,
 )
-from three_logic_client import ThreeLogicApiError, ThreeLogicClient
+from three_logic_client import ThreeLogicApiError, ThreeLogicClient, ThreeLogicCredentialsError
 
 
 app = FastAPI(title="3Logic Product Exporter")
@@ -44,6 +44,8 @@ def product_categories_json() -> list[dict[str, Any]]:
 def load_product_categories() -> list[dict[str, Any]]:
     try:
         return ThreeLogicClient().list_product_categories()
+    except ThreeLogicCredentialsError as error:
+        raise credentials_http_error() from error
     except ThreeLogicApiError as error:
         raise three_logic_http_error("3Logic product categories request failed", error) from error
 
@@ -82,6 +84,8 @@ def export_products(
             no_attributes=no_attributes,
         )
         csv_bytes, exported_count = export_products_to_csv_bytes(products, usd_to_rub)
+    except ThreeLogicCredentialsError as error:
+        raise credentials_http_error() from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except ThreeLogicApiError as error:
@@ -219,3 +223,7 @@ def decimal_to_url_value(value: Decimal) -> str:
 def three_logic_http_error(message: str, error: ThreeLogicApiError) -> HTTPException:
     status = f" HTTP {error.status_code}" if error.status_code else ""
     return HTTPException(status_code=502, detail=f"{message}{status}: {error}")
+
+
+def credentials_http_error() -> HTTPException:
+    return HTTPException(status_code=403, detail="Access denied: please set the password in .env.")

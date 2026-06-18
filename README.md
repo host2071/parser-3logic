@@ -112,6 +112,61 @@ the `X-Exported-Products` response header. By default, the filename includes
 the category ID, for example `products_export_category_123.csv`. You can override
 it with the `filename` query parameter.
 
+## 1C SOAP Server
+
+The SOAP service is a separate entry point for 1C stock and price import. Run it
+from the `parser3log` directory:
+
+```powershell
+uvicorn soap:app --host 0.0.0.0 --port 8001
+```
+
+WSDL URL for 1C:
+
+```text
+http://127.0.0.1:8001/ws/InterfaceVersion?wsdl
+```
+
+The SOAP service name and path are fixed as `InterfaceVersion` by default. You
+can override the path with `SOAP_PATH`, but for 1C compatibility keep it as:
+
+```env
+SOAP_PATH=/ws/InterfaceVersion
+```
+
+Optional HTTP Basic authentication:
+
+```env
+SOAP_BASIC_USER=your_soap_user
+SOAP_BASIC_PASSWORD=your_soap_password
+```
+
+If either `SOAP_BASIC_USER` or `SOAP_BASIC_PASSWORD` is empty, SOAP Basic auth is
+disabled.
+
+SOAP methods:
+
+```text
+GetInterfaceVersion()
+GetStockPrices(categoryIds, priceCategoryId, includeOutOfStock, usdToRub)
+GetStockPriceByPartnumber(partnumber, usdToRub)
+GetStockPriceByBarcode(barcode, usdToRub)
+```
+
+`categoryIds` is a comma-separated list of 3Logic product category IDs, for
+example `979198,100500`. Empty `categoryIds` is rejected so the service never
+exports the whole catalog by accident.
+
+Products are matched in 1C by `partnumber` and `barcode`. Each SOAP product item
+contains:
+
+```text
+partnumber, barcode, productId, name, categoryId, price, currency, priceRub, remain, onOrder, updatedAt
+```
+
+`priceRub` uses the same USD-to-RUB conversion logic as the CSV exporter. If
+`usdToRub` is empty, the default rate is `75`.
+
 ## CSV Template
 
 The template is written with `,` as the delimiter and UTF-8 BOM encoding for Excel compatibility.

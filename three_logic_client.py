@@ -33,6 +33,10 @@ class ThreeLogicApiError(RuntimeError):
         self.payload = payload
 
 
+class ThreeLogicCredentialsError(ValueError):
+    """Raised when 3Logic credentials are missing from the environment."""
+
+
 @dataclass(frozen=True)
 class ThreeLogicSettings:
     api_base_url: str
@@ -48,7 +52,7 @@ class ThreeLogicSettings:
         password = os.getenv("THREELOGIC_PASSWORD", "").strip()
 
         if not login or not password:
-            raise ValueError(
+            raise ThreeLogicCredentialsError(
                 "Set THREELOGIC_LOGIN and THREELOGIC_PASSWORD in .env before calling the API."
             )
 

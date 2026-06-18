@@ -74,7 +74,7 @@ def product_to_csv_row(
     photos = product.get("photos")
 
     row = empty_product_row(csv_columns)
-    set_column(row, csv_columns, "KIT ID*", "")
+    set_column(row, csv_columns, "KIT ID*", value_or_empty(product.get("product_id")))
     set_column(
         row,
         csv_columns,
@@ -97,15 +97,38 @@ def product_to_csv_row(
     set_column(row, csv_columns, "Склад: Склад №1", value_or_empty(product.get("remain")))
     set_column(row, csv_columns, "Внешний ID: YML", value_or_empty(product.get("product_id")))
     set_column(row, csv_columns, "Изображения и видео", photo_urls(photos))
-    set_column(row, csv_columns, "Количество упаковок", value_or_empty(product.get("package_quantity")))
-    set_column(row, csv_columns, "Высота упаковки, см", value_or_empty(product.get("product_height")))
-    set_column(row, csv_columns, "Ширина упаковки, см", value_or_empty(product.get("product_width")))
-    set_column(row, csv_columns, "Длина упаковки, см", value_or_empty(product.get("product_length")))
-    set_column(row, csv_columns, "Вес с упаковкой, г", kilograms_to_grams(product.get("package_weight")))
+    set_column(row, csv_columns, "Количество упаковок", "1")
+    set_column(row, csv_columns, "Высота упаковки, см", meters_to_centimeters(product.get("product_height")))
+    set_column(row, csv_columns, "Ширина упаковки, см", meters_to_centimeters(product.get("product_width")))
+    set_column(row, csv_columns, "Длина упаковки, см", meters_to_centimeters(product.get("product_length")))
+    set_column(row, csv_columns, "Вес с упаковкой, г", kilograms_to_grams(product.get("product_length")))
     set_column(row, csv_columns, "Бренд", value_or_empty(product.get("brand_name")))
 
     fill_attributes(row, csv_columns, attribute_columns, product.get("attributes"))
     return row
+
+
+def product_to_stock_price(
+    product: dict[str, Any],
+    usd_to_rub_rate: Decimal,
+) -> dict[str, Any]:
+    return {
+        "partnumber": value_or_empty(product.get("partnumber")),
+        "barcode": value_or_empty(product.get("barcode")),
+        "productId": value_or_empty(product.get("product_id")),
+        "name": first_not_empty(
+            product.get("product_name"),
+            product.get("model"),
+            product.get("partnumber"),
+        ),
+        "categoryId": value_or_empty(product.get("product_category_id")),
+        "price": value_or_empty(product.get("price")),
+        "currency": value_or_empty(product.get("currency_iso_code")),
+        "priceRub": product_price_in_rub(product, usd_to_rub_rate),
+        "remain": value_or_empty(product.get("remain")),
+        "onOrder": bool(product.get("on_order")),
+        "updatedAt": value_or_empty(product.get("update_date")),
+    }
 
 
 def empty_product_row(csv_columns: list[str]) -> list[str]:
@@ -243,6 +266,15 @@ def kilograms_to_grams(value: Any) -> str:
 
     grams = weight * Decimal("1000")
     return decimal_to_string(grams)
+
+
+def meters_to_centimeters(value: Any) -> str:
+    meters = parse_optional_decimal(value)
+    if meters is None:
+        return value_or_empty(value)
+
+    centimeters = meters * Decimal("100")
+    return decimal_to_string(centimeters)
 
 
 def parse_decimal(value: Any) -> Decimal:
