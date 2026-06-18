@@ -275,6 +275,9 @@ async def require_basic_auth(request: Request, call_next):
     if is_valid_basic_auth(auth_header, credentials):
         return await call_next(request)
 
+    if has_basic_auth_header(auth_header):
+        return Response(status_code=403)
+
     return Response(
         status_code=401,
         headers={"WWW-Authenticate": 'Basic realm="InterfaceVersion"'},
@@ -297,3 +300,8 @@ def is_valid_basic_auth(auth_header: str, credentials: tuple[str, str]) -> bool:
     user, _, password = decoded.partition(":")
     expected_user, expected_password = credentials
     return compare_digest(user, expected_user) and compare_digest(password, expected_password)
+
+
+def has_basic_auth_header(auth_header: str) -> bool:
+    scheme, _, encoded = auth_header.partition(" ")
+    return scheme.lower() == "basic" and bool(encoded.strip())

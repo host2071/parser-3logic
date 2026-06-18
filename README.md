@@ -144,6 +144,10 @@ SOAP_BASIC_PASSWORD=your_soap_password
 If either `SOAP_BASIC_USER` or `SOAP_BASIC_PASSWORD` is empty, SOAP Basic auth is
 disabled.
 
+When SOAP Basic auth is enabled:
+- `401 Unauthorized` is returned when the `Authorization` header is missing.
+- `403 Forbidden` is returned when credentials are provided but invalid.
+
 SOAP methods:
 
 ```text
