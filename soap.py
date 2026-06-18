@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import base64
 import os
+import sys
+import types
 from decimal import Decimal
 from hmac import compare_digest
+from io import BytesIO, StringIO
+from collections.abc import Iterable, Iterator, MutableSet, Sequence
 from typing import Any, Iterable
+from http.cookies import SimpleCookie
+from urllib.error import HTTPError
+from urllib.parse import quote, unquote, urlencode
+from urllib.request import Request, urlopen
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
-from spyne import Application, Array, Boolean, ComplexModel, Fault, ServiceBase, Unicode, rpc
-from spyne.protocol.soap import Soap11
-from spyne.server.wsgi import WsgiApplication
-from starlette.middleware.wsgi import WSGIMiddleware
-
 from export_products import DEFAULT_USD_TO_RUB_RATE, parse_decimal, parse_id_list, product_to_stock_price
 from three_logic_client import ThreeLogicApiError, ThreeLogicClient, ThreeLogicCredentialsError
 
@@ -22,6 +25,80 @@ SOAP_NAMESPACE = "urn:InterfaceVersion"
 DEFAULT_SOAP_PATH = "/ws/InterfaceVersion"
 
 load_dotenv()
+
+
+def install_spyne_six_shim() -> None:
+    """Provide the bits of spyne.util.six that spyne expects on Python 3.12."""
+    if "spyne.util.six" in sys.modules:
+        return
+
+    six = types.ModuleType("spyne.util.six")
+    six.__path__ = []  # type: ignore[attr-defined]
+    six.PY = sys.version_info[0]
+    six.PY2 = False
+    six.PY3 = True
+    six.PY34 = True
+    six.string_types = (str,)
+    six.integer_types = (int,)
+    six.class_types = (type,)
+    six.text_type = str
+    six.binary_type = bytes
+    six.BytesIO = BytesIO
+    six.StringIO = StringIO
+    six.get_function_name = lambda func: getattr(func, "__name__", repr(func))  # type: ignore[assignment]
+    six.add_metaclass = lambda metaclass: (  # type: ignore[assignment]
+        lambda cls: metaclass(cls.__name__, cls.__bases__, dict(cls.__dict__))
+    )
+    six.with_metaclass = lambda metaclass, base=object: metaclass("TemporaryClass", (base,), {})  # type: ignore[assignment]
+
+    moves = types.ModuleType("spyne.util.six.moves")
+    moves.__path__ = []  # type: ignore[attr-defined]
+
+    collections_abc = types.ModuleType("spyne.util.six.moves.collections_abc")
+    collections_abc.Iterable = Iterable
+    collections_abc.Iterator = Iterator
+    collections_abc.MutableSet = MutableSet
+    collections_abc.Sequence = Sequence
+
+    http_cookies = types.ModuleType("spyne.util.six.moves.http_cookies")
+    http_cookies.SimpleCookie = SimpleCookie
+
+    urllib = types.ModuleType("spyne.util.six.moves.urllib")
+    urllib.__path__ = []  # type: ignore[attr-defined]
+
+    urllib_parse = types.ModuleType("spyne.util.six.moves.urllib.parse")
+    urllib_parse.quote = quote
+    urllib_parse.unquote = unquote
+    urllib_parse.urlencode = urlencode
+
+    urllib_request = types.ModuleType("spyne.util.six.moves.urllib.request")
+    urllib_request.Request = Request
+    urllib_request.urlopen = urlopen
+
+    urllib_error = types.ModuleType("spyne.util.six.moves.urllib.error")
+    urllib_error.HTTPError = HTTPError
+
+    builtins_mod = types.ModuleType("spyne.util.six.moves.builtins")
+    builtins_mod.exec = exec
+    builtins_mod.print = print
+
+    sys.modules["spyne.util.six"] = six
+    sys.modules["spyne.util.six.moves"] = moves
+    sys.modules["spyne.util.six.moves.collections_abc"] = collections_abc
+    sys.modules["spyne.util.six.moves.http_cookies"] = http_cookies
+    sys.modules["spyne.util.six.moves.urllib"] = urllib
+    sys.modules["spyne.util.six.moves.urllib.parse"] = urllib_parse
+    sys.modules["spyne.util.six.moves.urllib.request"] = urllib_request
+    sys.modules["spyne.util.six.moves.urllib.error"] = urllib_error
+    sys.modules["spyne.util.six.moves.builtins"] = builtins_mod
+
+
+install_spyne_six_shim()
+
+from spyne import Application, Array, Boolean, ComplexModel, Fault, ServiceBase, Unicode, rpc
+from spyne.protocol.soap import Soap11
+from spyne.server.wsgi import WsgiApplication
+from starlette.middleware.wsgi import WSGIMiddleware
 
 
 class StockPriceItem(ComplexModel):
