@@ -128,6 +128,14 @@ class ThreeLogicClient:
             json=payload,
         )
 
+    def list_pricelist(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/api/catalog/pricelist",
+            headers=self.auth_headers(),
+            json=payload,
+        )
+
     def list_product_categories(self) -> list[dict[str, Any]]:
         data = self._request_any(
             "GET",
@@ -176,6 +184,32 @@ class ThreeLogicClient:
 
             if not isinstance(products, list):
                 raise ThreeLogicApiError("Products response contains invalid data field.", payload=response)
+
+            yield from products
+
+            total_pages = int(response.get("pages") or 0)
+            if page >= total_pages or not products:
+                break
+
+            page += 1
+
+    def iter_pricelist(
+        self,
+        per_page: int = 200,
+        filters: dict[str, Any] | None = None,
+    ):
+        page = 1
+        base_payload: dict[str, Any] = {"per_page": per_page}
+        if filters:
+            base_payload.update(filters)
+
+        while True:
+            payload = {**base_payload, "page": page}
+            response = self.list_pricelist(payload)
+            products = response.get("data", [])
+
+            if not isinstance(products, list):
+                raise ThreeLogicApiError("Pricelist response contains invalid data field.", payload=response)
 
             yield from products
 

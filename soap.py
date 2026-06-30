@@ -4,12 +4,12 @@ import base64
 import os
 import sys
 import types
+from collections.abc import Iterable as CIterable, Iterator, MutableSet, Sequence
 from decimal import Decimal
 from hmac import compare_digest
-from io import BytesIO, StringIO
-from collections.abc import Iterable, Iterator, MutableSet, Sequence
-from typing import Any, Iterable
 from http.cookies import SimpleCookie
+from io import BytesIO, StringIO
+from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import quote, unquote, urlencode
 from urllib.request import Request, urlopen
@@ -21,8 +21,10 @@ from three_logic_client import ThreeLogicApiError, ThreeLogicClient, ThreeLogicC
 
 
 INTERFACE_VERSION = "1.0"
-SOAP_NAMESPACE = "urn:InterfaceVersion"
+SOAP_NAMESPACE = "http://www.1c.ru/SaaS/1.0/WS"
+CORE_XDTO_NAMESPACE = "http://v8.1c.ru/8.1/data/core"
 DEFAULT_SOAP_PATH = "/ws/InterfaceVersion"
+DEFAULT_SOAP_PORT_NAME = "InterfaceVersionSoap"
 
 load_dotenv()
 
@@ -31,6 +33,22 @@ def install_spyne_six_shim() -> None:
     """Provide the bits of spyne.util.six that spyne expects on Python 3.12."""
     if "spyne.util.six" in sys.modules:
         return
+
+    def add_metaclass(metaclass):
+        def wrapper(cls):
+            attrs = dict(cls.__dict__)
+            slots = attrs.get("__slots__")
+            if slots is not None:
+                if isinstance(slots, str):
+                    slots = [slots]
+                for slot in slots:
+                    attrs.pop(slot, None)
+
+            attrs.pop("__dict__", None)
+            attrs.pop("__weakref__", None)
+            return metaclass(cls.__name__, cls.__bases__, attrs)
+
+        return wrapper
 
     six = types.ModuleType("spyne.util.six")
     six.__path__ = []  # type: ignore[attr-defined]
@@ -46,16 +64,14 @@ def install_spyne_six_shim() -> None:
     six.BytesIO = BytesIO
     six.StringIO = StringIO
     six.get_function_name = lambda func: getattr(func, "__name__", repr(func))  # type: ignore[assignment]
-    six.add_metaclass = lambda metaclass: (  # type: ignore[assignment]
-        lambda cls: metaclass(cls.__name__, cls.__bases__, dict(cls.__dict__))
-    )
+    six.add_metaclass = add_metaclass  # type: ignore[assignment]
     six.with_metaclass = lambda metaclass, base=object: metaclass("TemporaryClass", (base,), {})  # type: ignore[assignment]
 
     moves = types.ModuleType("spyne.util.six.moves")
     moves.__path__ = []  # type: ignore[attr-defined]
 
     collections_abc = types.ModuleType("spyne.util.six.moves.collections_abc")
-    collections_abc.Iterable = Iterable
+    collections_abc.Iterable = CIterable
     collections_abc.Iterator = Iterator
     collections_abc.MutableSet = MutableSet
     collections_abc.Sequence = Sequence
@@ -96,9 +112,24 @@ def install_spyne_six_shim() -> None:
 install_spyne_six_shim()
 
 from spyne import Application, Array, Boolean, ComplexModel, Fault, ServiceBase, Unicode, rpc
+from spyne.interface.wsdl.wsdl11 import Wsdl11
 from spyne.protocol.soap import Soap11
 from spyne.server.wsgi import WsgiApplication
 from starlette.middleware.wsgi import WSGIMiddleware
+
+
+def patch_wsdl_port_name() -> None:
+    original_add_port_to_service = Wsdl11._add_port_to_service
+
+    def patched_add_port_to_service(self, service, port_name, binding_name):
+        if port_name == "InterfaceVersion":
+            port_name = DEFAULT_SOAP_PORT_NAME
+        return original_add_port_to_service(self, service, port_name, binding_name)
+
+    Wsdl11._add_port_to_service = patched_add_port_to_service
+
+
+patch_wsdl_port_name()
 
 
 class StockPriceItem(ComplexModel):
@@ -117,10 +148,29 @@ class StockPriceItem(ComplexModel):
     updatedAt = Unicode
 
 
+class OneCArray(ComplexModel):
+    __namespace__ = CORE_XDTO_NAMESPACE
+    __type_name__ = "Array"
+
+    value = Unicode.customize(
+        max_occurs="unbounded",
+        sub_name="value",
+        sub_ns="",
+    )
+
+
 class InterfaceVersion(ServiceBase):
     @rpc(_returns=Unicode)
     def GetInterfaceVersion(ctx) -> str:
-        return INTERFACE_VERSION
+        return f"InterfaceVersion={INTERFACE_VERSION}"
+
+    @rpc(Unicode, _returns=OneCArray)
+    def GetVersions(ctx, exchangeName):
+        # 1C compatibility alias used by some exchange handlers.
+        _ = exchangeName
+        result = OneCArray()
+        result.value = [INTERFACE_VERSION]
+        return result
 
     @rpc(Unicode, Unicode, Boolean, Unicode, _returns=Array(StockPriceItem))
     def GetStockPrices(
@@ -164,12 +214,11 @@ class InterfaceVersion(ServiceBase):
         )
         return to_stock_price_items(products, usdToRub)
 
-
 def load_products(
     filters: dict[str, Any],
     include_out_of_stock: bool = False,
     per_page: int = 200,
-) -> Iterable[dict[str, Any]]:
+) -> CIterable[dict[str, Any]]:
     return ThreeLogicClient().iter_products(
         per_page=per_page,
         only_in_stock=False if include_out_of_stock else True,
@@ -183,7 +232,7 @@ def load_products(
 def load_products_by_exact_field(
     field_name: str,
     value: str,
-    direct_filters: Iterable[dict[str, Any]],
+    direct_filters: CIterable[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     expected_value = value.strip()
     for filters in direct_filters:
@@ -198,7 +247,7 @@ def load_products_by_exact_field(
     return []
 
 
-def to_stock_price_items(products: Iterable[dict[str, Any]], usd_to_rub: str | None) -> list[StockPriceItem]:
+def to_stock_price_items(products: CIterable[dict[str, Any]], usd_to_rub: str | None) -> list[StockPriceItem]:
     rate = parse_usd_to_rub_rate(usd_to_rub)
     items: list[StockPriceItem] = []
 

@@ -134,6 +134,28 @@ can override the path with `SOAP_PATH`, but for 1C compatibility keep it as:
 SOAP_PATH=/ws/InterfaceVersion
 ```
 
+SOAP namespace (targetNamespace):
+
+```text
+http://www.1c.ru/SaaS/1.0/WS
+```
+
+The WSDL service QName expected by 1C is fixed as:
+
+```text
+{http://www.1c.ru/SaaS/1.0/WS}:InterfaceVersion
+```
+
+The generated WSDL port name is:
+
+```text
+InterfaceVersionSoap
+```
+
+If the web-service reference in 1C was created before this namespace update,
+delete the old reference and add it again from the same WSDL URL so 1C reloads
+the updated contract.
+
 Optional HTTP Basic authentication:
 
 ```env
@@ -151,15 +173,33 @@ When SOAP Basic auth is enabled:
 SOAP methods:
 
 ```text
+GetVersions()
 GetInterfaceVersion()
 GetStockPrices(categoryIds, priceCategoryId, includeOutOfStock, usdToRub)
 GetStockPriceByPartnumber(partnumber, usdToRub)
 GetStockPriceByBarcode(barcode, usdToRub)
 ```
 
+`GetVersions(exchangeName)` and `GetInterfaceVersion()` return interface metadata
+string with version only, for example:
+
+```text
+InterfaceVersion=1.0
+```
+
 `categoryIds` is a comma-separated list of 3Logic product category IDs, for
 example `979198,100500`. Empty `categoryIds` is rejected so the service never
 exports the whole catalog by accident.
+
+`categoryIds` is a comma-separated list of 3Logic product category IDs, for
+example `979198,100500`. Empty `categoryIds` is rejected so the service never
+exports the whole catalog by accident.
+
+```text
+GetStockPrices(...) returns an array of products.
+GetStockPriceByPartnumber(...) returns matching products by partnumber.
+GetStockPriceByBarcode(...) returns matching products by barcode.
+```
 
 Products are matched in 1C by `partnumber` and `barcode`. Each SOAP product item
 contains:
@@ -170,6 +210,46 @@ partnumber, barcode, productId, name, categoryId, price, currency, priceRub, rem
 
 `priceRub` uses the same USD-to-RUB conversion logic as the CSV exporter. If
 `usdToRub` is empty, the default rate is `75`.
+
+## 1C OData Sync (UNF prices)
+
+Use `odata.py` to sync prices to 1C UNF via OData. Current scope is **prices
+only** (stock is read from 3Logic and logged, but stock documents are not
+created in 1C).
+
+Required `.env` settings:
+
+```env
+ONEC_ODATA_BASE_URL=http://127.0.0.1/unf/odata/standard.odata
+ONEC_ODATA_USER=
+ONEC_ODATA_PASSWORD=
+ONEC_PRICE_TYPE_GUID=
+ONEC_MARKUP_PRICE_TYPE_GUID=
+ONEC_MARKUP_PERCENT=10
+ONEC_PRICE_DOC_COMMENT=Загрузка двух видов цен через OData
+```
+
+The UNF `УстановкаЦенНоменклатуры` OData structure is fixed in `odata.py`:
+products are matched by the `Артикул` field, and the document is written with
+`ВидыЦен` and `Запасы` table sections.
+
+Safe test run:
+
+```powershell
+python odata.py --dry-run --limit 10 --batch-size 100
+```
+
+Production run:
+
+```powershell
+python odata.py --batch-size 200
+```
+
+Cron example (every 30 minutes):
+
+```cron
+*/30 * * * * cd /path/to/parser3log && /path/to/python odata.py --batch-size 200 >> /var/log/parser3log-odata.log 2>&1
+```
 
 ## CSV Template
 
