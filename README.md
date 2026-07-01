@@ -112,110 +112,11 @@ the `X-Exported-Products` response header. By default, the filename includes
 the category ID, for example `products_export_category_123.csv`. You can override
 it with the `filename` query parameter.
 
-## 1C SOAP Server
-
-The SOAP service is a separate entry point for 1C stock and price import. Run it
-from the `parser3log` directory:
-
-```powershell
-uvicorn soap:app --host 0.0.0.0 --port 8001
-```
-
-WSDL URL for 1C:
-
-```text
-http://127.0.0.1:8001/ws/InterfaceVersion?wsdl
-```
-
-The SOAP service name and path are fixed as `InterfaceVersion` by default. You
-can override the path with `SOAP_PATH`, but for 1C compatibility keep it as:
-
-```env
-SOAP_PATH=/ws/InterfaceVersion
-```
-
-SOAP namespace (targetNamespace):
-
-```text
-http://www.1c.ru/SaaS/1.0/WS
-```
-
-The WSDL service QName expected by 1C is fixed as:
-
-```text
-{http://www.1c.ru/SaaS/1.0/WS}:InterfaceVersion
-```
-
-The generated WSDL port name is:
-
-```text
-InterfaceVersionSoap
-```
-
-If the web-service reference in 1C was created before this namespace update,
-delete the old reference and add it again from the same WSDL URL so 1C reloads
-the updated contract.
-
-Optional HTTP Basic authentication:
-
-```env
-SOAP_BASIC_USER=your_soap_user
-SOAP_BASIC_PASSWORD=your_soap_password
-```
-
-If either `SOAP_BASIC_USER` or `SOAP_BASIC_PASSWORD` is empty, SOAP Basic auth is
-disabled.
-
-When SOAP Basic auth is enabled:
-- `401 Unauthorized` is returned when the `Authorization` header is missing.
-- `403 Forbidden` is returned when credentials are provided but invalid.
-
-SOAP methods:
-
-```text
-GetVersions()
-GetInterfaceVersion()
-GetStockPrices(categoryIds, priceCategoryId, includeOutOfStock, usdToRub)
-GetStockPriceByPartnumber(partnumber, usdToRub)
-GetStockPriceByBarcode(barcode, usdToRub)
-```
-
-`GetVersions(exchangeName)` and `GetInterfaceVersion()` return interface metadata
-string with version only, for example:
-
-```text
-InterfaceVersion=1.0
-```
-
-`categoryIds` is a comma-separated list of 3Logic product category IDs, for
-example `979198,100500`. Empty `categoryIds` is rejected so the service never
-exports the whole catalog by accident.
-
-`categoryIds` is a comma-separated list of 3Logic product category IDs, for
-example `979198,100500`. Empty `categoryIds` is rejected so the service never
-exports the whole catalog by accident.
-
-```text
-GetStockPrices(...) returns an array of products.
-GetStockPriceByPartnumber(...) returns matching products by partnumber.
-GetStockPriceByBarcode(...) returns matching products by barcode.
-```
-
-Products are matched in 1C by `partnumber` and `barcode`. Each SOAP product item
-contains:
-
-```text
-partnumber, barcode, productId, name, categoryId, price, currency, priceRub, remain, onOrder, updatedAt
-```
-
-`priceRub` uses the same USD-to-RUB conversion logic as the CSV exporter. If
-`usdToRub` is empty, the default rate is `75`.
-
 ## 1C OData Sync (UNF prices)
 
-Use `odata.py` to sync prices to 1C UNF via OData. Current scope is **prices
-only** (stock is read from 3Logic and logged, but stock documents are not
-created in 1C).
+Use `odata.py` to sync 3Logic prices and supplier stock to 1C UNF via OData.
+Prices are written to `Document_УстановкаЦенНоменклатуры`; supplier stock is
+written to `InformationRegister_ОстаткиТоваровПоставщиков`.
 
 Required `.env` settings:
 
@@ -229,9 +130,11 @@ ONEC_MARKUP_PERCENT=10
 ONEC_PRICE_DOC_COMMENT=Загрузка двух видов цен через OData
 ```
 
-The UNF `УстановкаЦенНоменклатуры` OData structure is fixed in `odata.py`:
-products are matched by the `Артикул` field, and the document is written with
-`ВидыЦен` and `Запасы` table sections.
+The UNF OData structure is fixed in `odata.py`: products are matched by
+`Catalog_НоменклатураПоставщиков.Идентификатор` -> 3Logic `product_ids`.
+Prices are written with `ВидыЦен` and `Запасы` table sections; supplier stock
+uses `Catalog_НоменклатураПоставщиков.Ref_Key` as
+`НоменклатураПоставщика_Key`.
 
 Safe test run:
 
