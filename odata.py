@@ -161,6 +161,7 @@ def main() -> None:
         raise SystemExit(f"3Logic preload failed: {error}") from error
 
     updates: list[PriceUpdate] = []
+    zero_stock_items: list[NomenclatureSupplierItem] = []
     not_found_count = 0
     for item in supplier_nomenclature_items:
         try:
@@ -170,17 +171,21 @@ def main() -> None:
 
         if update is None:
             not_found_count += 1
+            zero_stock_items.append(item)
             continue
         updates.append(update)
 
     print(f"Matched in 3Logic: {len(updates)}")
     print(f"Not found in 3Logic: {not_found_count}")
 
-    if not updates:
+    supplier_stock_records = build_supplier_stock_records(updates, zero_stock_items=zero_stock_items)
+
+    if not updates and not supplier_stock_records:
         print("No price updates to apply.")
         return
+    if not updates:
+        print("No price updates to apply.")
 
-    supplier_stock_records = build_supplier_stock_records(updates)
     batches = split_batches(updates, args.batch_size)
     print(f"Document batches: {len(batches)}")
 

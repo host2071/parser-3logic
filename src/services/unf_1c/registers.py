@@ -5,11 +5,20 @@ from typing import Any
 from src.utils import decimal_to_json_number
 
 from .constants import SUPPLIER_STOCK_OWNER_FIELD, SUPPLIER_STOCK_QTY_FIELD
-from .types import PriceUpdate
+from .types import NomenclatureSupplierItem, PriceUpdate
 
 
-def build_supplier_stock_records(updates: list[PriceUpdate]) -> list[dict[str, Any]]:
+def build_supplier_stock_records(
+    updates: list[PriceUpdate],
+    zero_stock_items: list[NomenclatureSupplierItem] | None = None,
+) -> list[dict[str, Any]]:
     records_by_key: dict[str, dict[str, Any]] = {}
+    for item in zero_stock_items or []:
+        records_by_key[item.key] = {
+            SUPPLIER_STOCK_OWNER_FIELD: item.key,
+            SUPPLIER_STOCK_QTY_FIELD: 0,
+        }
+
     for update in updates:
         if update.remain is None:
             continue
