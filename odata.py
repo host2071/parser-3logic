@@ -124,7 +124,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Sync 3Logic prices into 1C UNF via OData.")
     parser.add_argument("--dry-run", action="store_true", help="Do not create 1C documents, print summary only.")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of 1C nomenclature records to process.")
-    parser.add_argument("--batch-size", type=int, default=200, help="Number of rows per created price document.")
+    parser.add_argument("--batch-size", type=int, default=800, help="Number of rows per created price document.")
     parser.add_argument(
         "--usd-to-rub-rate",
         default=str(DEFAULT_USD_TO_RUB_RATE),
