@@ -95,13 +95,34 @@ def product_to_csv_row(
     set_column(row, csv_columns, "Категория 1-го уровня*", value_or_empty(product.get("price_category")))
     set_column(row, csv_columns, "Категория 2-го уровня", value_or_empty(product.get("product_category")))
     set_column(row, csv_columns, "Склад: Склад №1", value_or_empty(product.get("remain")))
+    set_column(row, csv_columns, "Склад по умолчанию", "Склад №1")
     set_column(row, csv_columns, "Внешний ID: YML", value_or_empty(product.get("product_id")))
     set_column(row, csv_columns, "Изображения и видео", photo_urls(photos))
-    set_column(row, csv_columns, "Количество упаковок", "1")
+    set_column(row, csv_columns, "Картинка", first_photo_url(photos))
+    set_column(row, csv_columns, "Количество упаковок", package_quantity(product.get("package_quantity")))
     set_column(row, csv_columns, "Высота упаковки, см", meters_to_centimeters(product.get("product_height")))
     set_column(row, csv_columns, "Ширина упаковки, см", meters_to_centimeters(product.get("product_width")))
     set_column(row, csv_columns, "Длина упаковки, см", meters_to_centimeters(product.get("product_length")))
-    set_column(row, csv_columns, "Вес с упаковкой, г", kilograms_to_grams(product.get("product_length")))
+    set_column(
+        row,
+        csv_columns,
+        "Вес с упаковкой, кг",
+        unit_weight_kilograms(product.get("package_weight"), product.get("package_quantity")),
+    )
+    set_column(
+        row,
+        csv_columns,
+        "СтранаПроисхождения",
+        first_not_empty(
+            product.get("country_of_origin"),
+            attribute_value_by_names(
+                product.get("attributes"),
+                {"Страна происхождения", "СтранаПроисхождения"},
+            ),
+            "Китай",
+        ),
+    )
+    set_column(row, csv_columns, "Поставщик", "3логик")
     set_column(row, csv_columns, "Бренд", value_or_empty(product.get("brand_name")))
 
     fill_attributes(row, csv_columns, attribute_columns, product.get("attributes"))
@@ -177,6 +198,36 @@ def photo_urls(photos: Any) -> str:
             urls.append(url)
 
     return " ".join(urls)
+
+
+def first_photo_url(photos: Any) -> str:
+    if not isinstance(photos, list):
+        return ""
+    for photo in photos:
+        if not isinstance(photo, dict):
+            continue
+        url = first_not_empty(photo.get("large_image_url"), photo.get("small_image_url"))
+        if url:
+            return url
+    return ""
+
+
+def attribute_value_by_names(attributes: Any, names: set[str]) -> str:
+    if not isinstance(attributes, list):
+        return ""
+    normalized_names = {normalize_name(name) for name in names if normalize_name(name)}
+    for attribute in attributes:
+        if not isinstance(attribute, dict):
+            continue
+        attribute_name = normalize_name(attribute.get("attribute_name"))
+        if attribute_name not in normalized_names:
+            continue
+        return value_or_empty(attribute.get("value"))
+    return ""
+
+
+def normalize_name(value: Any) -> str:
+    return value_or_empty(value).strip().lower().replace(" ", "").replace("_", "")
 
 
 def collect_attribute_columns(products: Iterable[dict[str, Any]]) -> list[str]:
@@ -259,13 +310,24 @@ def product_price_in_rub(product: dict[str, Any], usd_to_rub_rate: Decimal) -> s
     return decimal_to_string(price)
 
 
-def kilograms_to_grams(value: Any) -> str:
+def kilograms_to_string(value: Any) -> str:
     weight = parse_optional_decimal(value)
     if weight is None:
         return value_or_empty(value)
 
-    grams = weight * Decimal("1000")
-    return decimal_to_string(grams)
+    return decimal_to_string(weight)
+
+
+def unit_weight_kilograms(package_weight: Any, package_quantity_value: Any) -> str:
+    weight = parse_optional_decimal(package_weight)
+    if weight is None:
+        return value_or_empty(package_weight)
+
+    package_quantity = parse_optional_decimal(package_quantity_value)
+    if package_quantity is None or package_quantity == 0:
+        return decimal_to_string(weight)
+
+    return decimal_to_string(weight / package_quantity)
 
 
 def meters_to_centimeters(value: Any) -> str:
@@ -275,6 +337,13 @@ def meters_to_centimeters(value: Any) -> str:
 
     centimeters = meters * Decimal("100")
     return decimal_to_string(centimeters)
+
+
+def package_quantity(value: Any) -> str:
+    quantity = parse_optional_decimal(value)
+    if quantity is None:
+        return value_or_empty(value)
+    return decimal_to_string(quantity)
 
 
 def parse_decimal(value: Any) -> Decimal:
