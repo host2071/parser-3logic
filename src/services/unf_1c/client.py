@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 
 import requests
 
-from .constants import SUPPLIER_STOCK_REGISTER_ENTITY
+from .constants import SUPPLIER_STOCK_OWNER_FIELD, SUPPLIER_STOCK_QTY_FIELD, SUPPLIER_STOCK_REGISTER_ENTITY
 from .settings import ODataSyncError, OneCODataSettings
 
 
@@ -89,8 +89,34 @@ class OneCODataClient:
         url = f"{self.settings.base_url}/{entity_name}"
         return self._request("POST", url, json=payload)
 
+    def update_entity(self, entity_name: str, key_expr: str, payload: dict[str, Any]) -> dict[str, Any]:
+        url = f"{self.settings.base_url}/{entity_name}({key_expr})"
+        return self._request("PATCH", url, json=payload)
+
     def create_price_document(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.create_entity(self.settings.price_document_entity, payload)
 
     def create_supplier_stock_record(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.create_entity(SUPPLIER_STOCK_REGISTER_ENTITY, payload)
+
+    def update_supplier_stock_record(self, supplier_nomenclature_key: str, quantity: int | float) -> dict[str, Any]:
+        return self.update_entity(
+            SUPPLIER_STOCK_REGISTER_ENTITY,
+            key_expr=f"guid'{supplier_nomenclature_key}'",
+            payload={SUPPLIER_STOCK_QTY_FIELD: quantity},
+        )
+
+    def upsert_supplier_stock_record(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return self.create_supplier_stock_record(payload)
+        except ODataSyncError as error:
+            if "Запись с такими полями уже существует" not in str(error):
+                raise
+
+        supplier_nomenclature_key = str(payload.get(SUPPLIER_STOCK_OWNER_FIELD, "")).strip()
+        if not supplier_nomenclature_key:
+            raise ODataSyncError("Cannot update supplier stock record without supplier nomenclature key.")
+        quantity = payload.get(SUPPLIER_STOCK_QTY_FIELD)
+        if not isinstance(quantity, int | float):
+            raise ODataSyncError(f"Cannot update supplier stock record with invalid quantity: {quantity!r}")
+        return self.update_supplier_stock_record(supplier_nomenclature_key, quantity)

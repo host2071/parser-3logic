@@ -224,7 +224,7 @@ def main() -> None:
         created_stocks = 0
         for record in supplier_stock_records:
             try:
-                client.create_supplier_stock_record(record)
+                client.upsert_supplier_stock_record(record)
             except ODataSyncError as error:
                 raise SystemExit(f"Failed to write supplier stock register: {error}") from error
             created_stocks += 1
